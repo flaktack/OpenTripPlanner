@@ -28,6 +28,7 @@ import java.lang.reflect.Field;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.List;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
@@ -68,6 +69,7 @@ import org.opentripplanner.common.model.GenericLocation;
 import org.opentripplanner.gbannotation.GraphBuilderAnnotation;
 import org.opentripplanner.gbannotation.StopUnlinked;
 import org.opentripplanner.routing.algorithm.GenericAStar;
+import org.opentripplanner.routing.core.Fare;
 import org.opentripplanner.routing.core.OptimizeType;
 import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.core.State;
@@ -83,11 +85,13 @@ import org.opentripplanner.routing.impl.DefaultStreetVertexIndexFactory;
 import org.opentripplanner.routing.impl.GraphServiceImpl;
 import org.opentripplanner.routing.impl.RetryingPathServiceImpl;
 import org.opentripplanner.routing.services.StreetVertexIndexFactory;
+import org.opentripplanner.routing.services.FareService;
 import org.opentripplanner.routing.spt.DefaultShortestPathTreeFactory;
 import org.opentripplanner.routing.spt.GraphPath;
 import org.opentripplanner.routing.spt.ShortestPathTreeFactory;
 
 import com.beust.jcommander.internal.Sets;
+
 import com.vividsolutions.jts.geom.Coordinate;
 
 /**
@@ -915,6 +919,14 @@ public class VizGui extends JFrame implements VertexSelectionListener {
             System.out.println(s.getBackEdge());
         }
         
+        FareService fs = graph.getService(FareService.class);
+        System.out.println("Fare: ");
+        List<Fare> fares = fs.getCost(gp);
+        if(fares != null) {
+            for(Fare fare : fares) {
+                System.out.println("\t" + fare.toString());
+            }
+        }
         showGraph.highlightGraphPath(gp);
         options.cleanup();
     }
