@@ -57,7 +57,7 @@ public class TestFares extends TestCase {
 
         FareService fareService = gg.getService(FareService.class);
         
-        Fare cost = fareService.getCost(path).get(0);
+        Fare cost = fareService.getCost(options, path).get(0);
         assertEquals(cost.getFare(DefaultFareType.REGULAR), new Money(new WrappedCurrency("USD"), 425));
     }
 
@@ -79,7 +79,7 @@ public class TestFares extends TestCase {
         assertNotNull(path);
 
         FareService fareService = gg.getService(FareService.class);
-        Fare cost = fareService.getCost(path).get(0);
+        Fare cost = fareService.getCost(options, path).get(0);
         assertEquals(new Money(new WrappedCurrency("USD"), 200), cost.getFare(DefaultFareType.REGULAR));
 
         // long trip
@@ -91,7 +91,7 @@ public class TestFares extends TestCase {
 
         path = spt.getPath(gg.getVertex("TriMet_1252"), true);
         assertNotNull(path);
-        cost = fareService.getCost(path).get(0);
+        cost = fareService.getCost(options, path).get(0);
         
         //assertEquals(cost.getFare(DefaultFareType.REGULAR), new Money(new WrappedCurrency("USD"), 460));
         
@@ -104,7 +104,7 @@ public class TestFares extends TestCase {
 
         path = spt.getPath(gg.getVertex("TriMet_4231"), true);
         assertNotNull(path);
-        cost = fareService.getCost(path).get(0);
+        cost = fareService.getCost(options, path).get(0);
         //
         // this is commented out because portland's fares are, I think, broken in the gtfs. see
         // thread on gtfs-changes.

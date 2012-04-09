@@ -16,6 +16,7 @@ package org.opentripplanner.routing.services;
 import java.util.List;
 
 import org.opentripplanner.routing.core.Fare;
+import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.spt.GraphPath;
 
 /**
@@ -24,5 +25,5 @@ import org.opentripplanner.routing.spt.GraphPath;
  *
  */
 public interface FareService {
-	public List<Fare> getCost(GraphPath path);
+	public List<Fare> getCost(RoutingRequest request, GraphPath path);
 }

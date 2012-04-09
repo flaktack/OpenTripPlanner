@@ -90,7 +90,7 @@ public class TimeBasedBikeRentalFareService implements ChainedFareService, Seria
     }
 
     @Override
-    public List<Fare> getCost(GraphPath path) {
+    public List<Fare> getCost(RoutingRequest request, GraphPath path) {
         int cost = 0;
         long start = -1;
 
@@ -122,7 +122,7 @@ public class TimeBasedBikeRentalFareService implements ChainedFareService, Seria
 
         List<Fare> fares = null;
         if(next != null) {
-            fares = next.getCost(path);
+            fares = next.getCost(request, path);
         }
 
         if (cost == 0) {

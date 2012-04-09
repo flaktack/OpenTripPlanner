@@ -921,7 +921,7 @@ public class VizGui extends JFrame implements VertexSelectionListener {
         
         FareService fs = graph.getService(FareService.class);
         System.out.println("Fare: ");
-        List<Fare> fares = fs.getCost(gp);
+        List<Fare> fares = fs.getCost(options, gp);
         if(fares != null) {
             for(Fare fare : fares) {
                 System.out.println("\t" + fare.toString());

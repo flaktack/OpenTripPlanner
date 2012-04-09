@@ -274,6 +274,9 @@ public class RoutingRequest implements Cloneable, Serializable {
     /** This is true when a GraphPath is being traversed in reverse for optimization purposes. */
     public boolean reverseOptimizing = false;
 
+    /** Fare calculation information which is passed to the fare service. */
+    public String fareData;
+
     /** when true, do not use goal direction or stop at the target, build a full SPT */
     public boolean batch = false;
 
@@ -492,6 +495,11 @@ public class RoutingRequest implements Cloneable, Serializable {
     public void setBannedAgencies(String s) {
         if (s != null && !s.equals(""))
             bannedAgencies = new HashSet<String>(Arrays.asList(s.split(",")));
+    }
+
+    public void setFareData(String s) {
+        if(s != null && !s.equals(""))
+            fareData = s;
     }
 
     public final static int MIN_SIMILARITY = 1000;

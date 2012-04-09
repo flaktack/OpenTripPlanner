@@ -559,6 +559,7 @@ public class TestRequest extends TestCase {
             this.transferPenalty = Arrays.asList(0);
             this.maxTransfers = Arrays.asList(2);
             this.routerId = Arrays.asList(routerId);
+            this.fareData = Arrays.asList("");
             this.planGenerator = Context.getInstance().planGenerator;
             this.graphService = Context.getInstance().graphService;
             this.planGenerator.graphService = Context.getInstance().graphService;

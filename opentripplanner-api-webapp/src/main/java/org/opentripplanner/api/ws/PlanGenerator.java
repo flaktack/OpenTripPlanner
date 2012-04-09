@@ -162,7 +162,7 @@ public class PlanGenerator {
         TripPlan plan = new TripPlan(from, to, request.getDateTime());
 
         for (GraphPath path : paths) {
-            Itinerary itinerary = generateItinerary(path, request.isShowIntermediateStops());
+            Itinerary itinerary = generateItinerary(path, request);
             plan.addItinerary(itinerary);
         }
         return plan;
@@ -176,16 +176,16 @@ public class PlanGenerator {
      * generate turn-by-turn directions.
      * 
      * @param path
-     * @param showIntermediateStops whether intermediate stops are included in the generated
-     *        itinerary
+     * @param request
      * @return itinerary
      */
-    private Itinerary generateItinerary(GraphPath path, boolean showIntermediateStops) {
+    private Itinerary generateItinerary(GraphPath path, RoutingRequest request) {
         Graph graph = path.getRoutingContext().graph;
         TransitIndexService transitIndex = graph.getService(TransitIndexService.class);
 
-        Itinerary itinerary = makeEmptyItinerary(path);
+        Itinerary itinerary = makeEmptyItinerary(path, request);
         Set<Alert> postponedAlerts = null;
+        boolean showIntermediateStops = request.isShowIntermediateStops();
         Leg leg = null;
         CoordinateArrayListSequence coordinates = new CoordinateArrayListSequence();
         double previousElevation = Double.MAX_VALUE;
@@ -621,7 +621,7 @@ public class PlanGenerator {
      * 
      * @return
      */
-    private Itinerary makeEmptyItinerary(GraphPath path) {
+    private Itinerary makeEmptyItinerary(GraphPath path, RoutingRequest request) {
         Itinerary itinerary = new Itinerary();
 
         State startState = path.states.getFirst();
@@ -636,7 +636,7 @@ public class PlanGenerator {
         FareService fareService = graph.getService(FareService.class);
         TransitIndexService transitIndex = graph.getService(TransitIndexService.class);
         if (fareService != null) {
-            itinerary.fares = fareService.getCost(path);
+            itinerary.fares = fareService.getCost(request, path);
 
             if(itinerary.fares != null && itinerary.fares.size() > 0) {
                 itinerary.totalFare = new Fare();

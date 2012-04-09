@@ -24,12 +24,14 @@ import java.util.Set;
 
 import org.onebusaway.gtfs.model.AgencyAndId;
 import org.onebusaway.gtfs.model.FareAttribute;
+import org.onebusaway.gtfs.model.Route;
 import org.onebusaway.gtfs.model.Stop;
 import org.opentripplanner.routing.core.Fare;
+import org.opentripplanner.routing.core.Fare.DefaultFareType;
 import org.opentripplanner.routing.core.FareRuleSet;
+import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.core.WrappedCurrency;
-import org.opentripplanner.routing.core.Fare.DefaultFareType;
 import org.opentripplanner.routing.edgetype.HopEdge;
 import org.opentripplanner.routing.graph.Edge;
 import org.opentripplanner.routing.services.FareService;
@@ -70,7 +72,7 @@ public class DefaultFareServiceImpl implements FareService, Serializable {
             if ( ! (edge instanceof HopEdge))
                 continue;
             HopEdge hEdge = (HopEdge) edge;
-            if (ride == null || ! state.getRoute().equals(ride.route)) {
+            if (ride == null || ! state.getRoute().equals(ride.route.getId())) {
                 ride = new Ride();
                 rides.add(ride);
                 ride.startZone = hEdge.getStartStop().getZoneId();
@@ -90,9 +92,8 @@ public class DefaultFareServiceImpl implements FareService, Serializable {
     }
 
     // TODO: Overridable classify method for rides / make rides from list<state>
-    
     @Override
-    public List<Fare> getCost(GraphPath path) {
+    public List<Fare> getCost(RoutingRequest request, GraphPath path) {
         List<Ride> rides = createRides(path);
         return getCost(rides);
     }

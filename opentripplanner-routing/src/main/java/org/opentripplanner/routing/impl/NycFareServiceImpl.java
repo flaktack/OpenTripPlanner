@@ -24,6 +24,7 @@ import org.onebusaway.gtfs.model.AgencyAndId;
 import org.onebusaway.gtfs.model.Route;
 import org.onebusaway.gtfs.model.Trip;
 import org.opentripplanner.routing.core.Fare;
+import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.core.WrappedCurrency;
 import org.opentripplanner.routing.core.Fare.DefaultFareType;
@@ -69,8 +70,7 @@ public class NycFareServiceImpl implements FareService, Serializable {
 	}
 
 	@Override
-	public List<Fare> getCost(GraphPath path) {
-
+	public List<Fare> getCost(RoutingRequest request, GraphPath path) {
 		final List<AgencyAndId> SIR_PAID_STOPS = makeMtaStopList("S31", "S30");
 
 		final List<AgencyAndId> SUBWAY_FREE_TRANSFER_STOPS = makeMtaStopList(

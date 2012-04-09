@@ -159,6 +159,9 @@ public abstract class RoutingResource {
      *  org.opentripplanner.api.ws.Planner. */
     @DefaultValue("-1") @QueryParam("maxTransfers") protected List<Integer> maxTransfers;
 
+    /** The fare data which will be used to influence the fare service's calculations. */
+    @DefaultValue("") @QueryParam("fareData") protected List<String> fareData;
+
     /** If true, goal direction is turned off and a full path tree is built (specify only once) */
     @DefaultValue("false") @QueryParam("batch") protected List<Boolean> batch;
 
@@ -314,6 +317,7 @@ public abstract class RoutingResource {
         } else {
             request.setTransferPenalty(get(transferPenalty, n, request.getTransferPenalty()));
         }
+        request.setFareData(get(fareData, n, ""));
         request.setBatch(get(batch, n, new Boolean(request.isBatch())));
         request.setOptimize(opt);
         TraverseModeSet modeSet = get(modes, n, request.getModes());
