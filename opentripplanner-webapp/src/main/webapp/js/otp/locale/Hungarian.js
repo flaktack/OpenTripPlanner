@@ -178,6 +178,7 @@ otp.locale.Hungarian = {
         trip_details : "útvonal Details",
         fare         : "Fare",
         fare_symbol  : "\u20ac",
+        fare_format  : "0 Ft",
         travel       : "Travel",
         valid        : "Valid",
         trip_length  : "Time",

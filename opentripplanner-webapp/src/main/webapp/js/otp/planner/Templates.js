@@ -109,7 +109,7 @@ otp.planner.Templates = {
             for(var i = 0; i < otp.config.planner.fareTypes.length; ++i) {
                 var d = otp.config.planner.fareTypes[i],
                     k = d[0] + 'Fare', // variable name, should be the same as in planner/Util.js
-                    t = 0 || d[1];  // human readable name
+                    t = this.locale.labels[d[0] + '_fare'] || d[1];  // human readable name
 
                 fareText += '<tpl if="' + k + ' != null"><tr><td>' 
                 if(fareLabelIf) {

@@ -257,6 +257,10 @@ otp.planner.Utils = {
      * NOTE: this was borrowed from Extjs format library http://dev.sencha.com/deploy/dev/docs/source/Format.html#method-Ext.util.Format-usMoney
      */
     formatMoney : function(cents) {
+        if(otp.config.locale.labels.fare_format) {
+            return Ext.util.Format.number(cents, otp.config.locale.labels.fare_format);
+        }
+
         var retVal = cents;
 
         var v = cents / 100;
