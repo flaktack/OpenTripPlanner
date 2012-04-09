@@ -15,6 +15,7 @@ package org.opentripplanner.routing.impl;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Currency;
 import java.util.LinkedList;
 import java.util.List;
@@ -25,7 +26,7 @@ import org.onebusaway.gtfs.model.Trip;
 import org.opentripplanner.routing.core.Fare;
 import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.core.WrappedCurrency;
-import org.opentripplanner.routing.core.Fare.FareType;
+import org.opentripplanner.routing.core.Fare.DefaultFareType;
 import org.opentripplanner.routing.edgetype.HopEdge;
 import org.opentripplanner.routing.edgetype.StreetEdge;
 import org.opentripplanner.routing.graph.Edge;
@@ -68,7 +69,7 @@ public class NycFareServiceImpl implements FareService, Serializable {
 	}
 
 	@Override
-	public Fare getCost(GraphPath path) {
+	public List<Fare> getCost(GraphPath path) {
 
 		final List<AgencyAndId> SIR_PAID_STOPS = makeMtaStopList("S31", "S30");
 
@@ -112,19 +113,17 @@ public class NycFareServiceImpl implements FareService, Serializable {
 				newRide = null;
 				continue;
 			}
-			AgencyAndId routeId = state.getRoute();
-			if (routeId == null) {
+			Route route = state.getBackTrip() != null ? state.getBackTrip().getRoute() : null;
+			if (route == null) {
 				newRide = null;
 			} else {
-				if (newRide == null || !routeId.equals(newRide.route)) {
+				if (newRide == null || !route.equals(newRide.route)) {
 					newRide = new Ride();
 					rides.add(newRide);
 
 					newRide.firstStop = ((HopEdge) backEdge).getStartStop();
 
-					newRide.route = routeId;
-					Trip trip = state.getBackTrip();
-					Route route = trip.getRoute();
+					newRide.route = route;
 					int type = route.getType();
 					newRide.classifier = type;
 					String shortName = route.getShortName();
@@ -189,7 +188,7 @@ public class NycFareServiceImpl implements FareService, Serializable {
 					if (CANARSIE.contains(ride.lastStop.getId())) {
 						canarsieFreeTransfer = true;
 					}
-					siLocalBus = ride.route.getId().startsWith("S");
+					siLocalBus = ride.route.getId().getId().startsWith("S");
 				} else if (ride.classifier.equals(EXPRESS_BUS)) {
 					state = NycFareState.BUS_PRE_TRANSFER;
 					totalFare += EXPRESS_FARE;
@@ -287,7 +286,7 @@ public class NycFareServiceImpl implements FareService, Serializable {
 					/* should not happen, and unhandled */
 					_log.warn("Should not transfer from SIR to SIR");
 				} else if (ride.classifier.equals(LOCAL_BUS)) {
-					if (!SIR_BONUS_ROUTES.contains(ride.route)) {
+					if (!SIR_BONUS_ROUTES.contains(ride.route.getId())) {
 						totalFare += ORDINARY_FARE;
 					}
 					state = NycFareState.BUS_PRE_TRANSFER;
@@ -308,7 +307,7 @@ public class NycFareServiceImpl implements FareService, Serializable {
 					/* should not happen, and unhandled */
 					_log.warn("Should not transfer from SIR to SIR");
 				} else if (ride.classifier.equals(LOCAL_BUS)) {
-					if (!ride.route.getId().startsWith("S")) {
+					if (!ride.route.getId().getId().startsWith("S")) {
 						totalFare += ORDINARY_FARE;
 						state = NycFareState.BUS_PRE_TRANSFER;
 					} else {
@@ -358,10 +357,11 @@ public class NycFareServiceImpl implements FareService, Serializable {
 
 		Currency currency = Currency.getInstance("USD");
 		Fare fare = new Fare();
-		fare.addFare(FareType.regular, new WrappedCurrency(currency),
+		fare.addFare(DefaultFareType.REGULAR, new WrappedCurrency(currency),
 				(int) Math.round(totalFare
 						* Math.pow(10, currency.getDefaultFractionDigits())));
-		return fare;
+
+		return Collections.singletonList(fare);
 	}
 
 	private List<AgencyAndId> makeMtaStopList(String... stops) {

@@ -16,6 +16,7 @@ package org.opentripplanner.api.ws;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
@@ -33,10 +34,14 @@ import org.opentripplanner.common.geometry.DirectionUtils;
 import org.opentripplanner.common.geometry.GeometryUtils;
 import org.opentripplanner.common.geometry.PackedCoordinateSequence;
 import org.opentripplanner.common.model.P2;
+import org.opentripplanner.routing.core.Fare;
+import org.opentripplanner.routing.core.FareType;
+import org.opentripplanner.routing.core.Money;
 import org.opentripplanner.routing.core.RoutingContext;
 import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.core.TraverseMode;
+import org.opentripplanner.routing.core.WrappedCurrency;
 import org.opentripplanner.routing.edgetype.AreaEdge;
 import org.opentripplanner.routing.edgetype.DwellEdge;
 import org.opentripplanner.routing.edgetype.EdgeWithElevation;
@@ -629,8 +634,68 @@ public class PlanGenerator {
 
         Graph graph = path.getRoutingContext().graph;
         FareService fareService = graph.getService(FareService.class);
+        TransitIndexService transitIndex = graph.getService(TransitIndexService.class);
         if (fareService != null) {
-            itinerary.fare = fareService.getCost(path);
+            itinerary.fares = fareService.getCost(path);
+
+            if(itinerary.fares != null && itinerary.fares.size() > 0) {
+                itinerary.totalFare = new Fare();
+
+                int base_cost = 0;
+                Set<FareType> fareTypes = new HashSet<FareType>();
+                WrappedCurrency currency = null;
+                for(Fare fare : itinerary.fares) {
+
+                    for(FareType ft : fare.fares.keySet()) {
+
+                        Money mon = fare.getFare(ft);
+                        if(currency == null) {
+                            currency = mon.getCurrency();
+                        } else if(!currency.equals(mon.getCurrency())) {
+                            LOG.warn("Differing currencies for itinerary: " + currency + ", " + mon.getCurrency());
+                        }
+
+                        if(ft.isGlobal()) {
+                            base_cost += mon.getCents();
+                        } else {
+                            fareTypes.add(ft);
+                        }
+                    }
+
+                    if(transitIndex != null && fare.agencyId != null) {
+                        Agency agency = transitIndex.getAgency(fare.agencyId);
+                        fare.agencyName = agency.getName();
+                    }
+                }
+
+                for(FareType ft : fareTypes) {
+                    itinerary.totalFare.addFare(ft, currency, base_cost);
+                }
+
+                for(Fare fare : itinerary.fares) {
+                    for(FareType ft : fareTypes) {
+                        int cost = itinerary.totalFare.getFare(ft).getCents();
+
+                        FareType it = ft;
+                        Money mon = fare.getFare(it);
+
+                        // if the specified FareType doesn't have a cost,
+                        // try to find a price for it on one of its parents
+                        while(it != null && mon == null) {
+                            it  = it.getParent();
+                            mon = fare.getFare(it);
+                        }
+
+                        if(mon != null) {
+                            itinerary.totalFare.addFare(ft, currency, cost + mon.getCents());
+
+                            if(ft != it) { // used a parent FareType to get a price
+                                fare.addFare(ft, currency, mon.getCents());
+                            }
+                        }
+                    }
+                }
+            }
         }
         itinerary.transfers = -1;
         return itinerary;

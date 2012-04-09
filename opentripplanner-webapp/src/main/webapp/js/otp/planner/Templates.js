@@ -120,10 +120,12 @@ otp.planner.Templates = {
                     // TODO: add a distance verb to locale and break distance up into modes (i.e., Distance :  4.54 miles (includes 2.2 mi walk, 2.32 mi bike))
                     //'<tpl if="walkDistance"><tr><td><strong>{distanceVerb}</strong></td><td>{walkDistance}</td></tr></tpl>',
 
-                    '<tpl if="regularFare != null && showFareInfo == true">',
-                      '<tr><td><strong>' + this.locale.labels.fare  + '</strong></td><td>' + this.locale.labels.regular_fare + ' {regularFare}</td></tr>',
-                      '<tpl if="seniorFare != null"><tr><td></td><td>'   + this.locale.labels.senior_fare  + ' {seniorFare}</td><tr></tpl>',
-                      '<tpl if="studentFare  != null"><tr><td></td><td>' + this.locale.labels.student_fare + ' {studentFare}</td><tr></tpl>',
+                    '<tpl showFareInfo == true">',
+                      '<tpl if="regularFare != null">',
+                        '<tr><td><strong>' + this.locale.labels.fare      + '</strong></td><td>{regularFare}</td></tr>',
+                      '</tpl>',
+                      '<tpl if="studentFare != null"><tr><td></td><td>{studentFare} (student)</td></tr></tpl>',
+                      '<tpl if="seniorFare != null"><tr><td></td><td>{seniorFare} (senior)</td></tr></tpl>',
                     '</tpl>',
 
                     '<tr class="valid_date"><td>&nbsp;</td><td>&nbsp;</td></tr>',

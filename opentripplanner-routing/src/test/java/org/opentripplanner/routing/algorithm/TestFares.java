@@ -22,7 +22,7 @@ import org.opentripplanner.ConstantsForTests;
 import org.opentripplanner.gtfs.GtfsContext;
 import org.opentripplanner.gtfs.GtfsLibrary;
 import org.opentripplanner.routing.core.Fare;
-import org.opentripplanner.routing.core.Fare.FareType;
+import org.opentripplanner.routing.core.Fare.DefaultFareType;
 import org.opentripplanner.routing.core.Money;
 import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.core.WrappedCurrency;
@@ -57,8 +57,8 @@ public class TestFares extends TestCase {
 
         FareService fareService = gg.getService(FareService.class);
         
-        Fare cost = fareService.getCost(path);
-        assertEquals(cost.getFare(FareType.regular), new Money(new WrappedCurrency("USD"), 425));
+        Fare cost = fareService.getCost(path).get(0);
+        assertEquals(cost.getFare(DefaultFareType.REGULAR), new Money(new WrappedCurrency("USD"), 425));
     }
 
     public void testPortland() throws Exception {
@@ -79,8 +79,8 @@ public class TestFares extends TestCase {
         assertNotNull(path);
 
         FareService fareService = gg.getService(FareService.class);
-        Fare cost = fareService.getCost(path);
-        assertEquals(new Money(new WrappedCurrency("USD"), 200), cost.getFare(FareType.regular));
+        Fare cost = fareService.getCost(path).get(0);
+        assertEquals(new Money(new WrappedCurrency("USD"), 200), cost.getFare(DefaultFareType.REGULAR));
 
         // long trip
 
@@ -91,9 +91,9 @@ public class TestFares extends TestCase {
 
         path = spt.getPath(gg.getVertex("TriMet_1252"), true);
         assertNotNull(path);
-        cost = fareService.getCost(path);
+        cost = fareService.getCost(path).get(0);
         
-        //assertEquals(cost.getFare(FareType.regular), new Money(new WrappedCurrency("USD"), 460));
+        //assertEquals(cost.getFare(DefaultFareType.REGULAR), new Money(new WrappedCurrency("USD"), 460));
         
         // complex trip
         options.maxTransfers = 5;
@@ -104,10 +104,10 @@ public class TestFares extends TestCase {
 
         path = spt.getPath(gg.getVertex("TriMet_4231"), true);
         assertNotNull(path);
-        cost = fareService.getCost(path);
+        cost = fareService.getCost(path).get(0);
         //
         // this is commented out because portland's fares are, I think, broken in the gtfs. see
         // thread on gtfs-changes.
-        // assertEquals(cost.getFare(FareType.regular), new Money(new WrappedCurrency("USD"), 430));
+        // assertEquals(cost.getFare(DefaultFareType.REGULAR), new Money(new WrappedCurrency("USD"), 430));
     }
 }

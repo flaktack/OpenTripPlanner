@@ -79,9 +79,16 @@ public class Itinerary {
     public Integer transfers = 0;
 
     /**
-     * The cost of this trip
+     * The total cost of this trip.
      */
-    public Fare fare = new Fare();
+    public Fare totalFare = new Fare();
+
+    /**
+     * The fares used on this itinerary.
+     */
+    @XmlElementWrapper(name = "fares")
+    @XmlElement(name = "fare")
+    public List<Fare> fares = null;
 
     /**
      * A list of Legs. Each Leg is either a walking (cycling, car) portion of the trip, or a transit

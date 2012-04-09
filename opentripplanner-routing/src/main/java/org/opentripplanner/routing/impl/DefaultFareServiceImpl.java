@@ -14,6 +14,7 @@
 package org.opentripplanner.routing.impl;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.Currency;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -28,76 +29,13 @@ import org.opentripplanner.routing.core.Fare;
 import org.opentripplanner.routing.core.FareRuleSet;
 import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.core.WrappedCurrency;
-import org.opentripplanner.routing.core.Fare.FareType;
+import org.opentripplanner.routing.core.Fare.DefaultFareType;
 import org.opentripplanner.routing.edgetype.HopEdge;
 import org.opentripplanner.routing.graph.Edge;
 import org.opentripplanner.routing.services.FareService;
 import org.opentripplanner.routing.spt.GraphPath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-/** A set of edges on a single route, with associated information for calculating fares */
-class Ride {
-    
-    AgencyAndId route;
-
-    Set<String> zones;
-
-    String startZone;
-
-    String endZone;
-
-    long startTime;
-
-    long endTime;
-
-    // in DefaultFareServiceImpl classifier is just the TraverseMode
-    // it can be used differently in custom fare services
-    public Object classifier;
-
-    public Stop firstStop;
-
-    public Stop lastStop;
-
-    public Ride() {
-        zones = new HashSet<String>();
-    }
-
-    public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("Ride");
-        if (startZone != null) {
-            builder.append("(from zone ");
-            builder.append(startZone);
-        }
-        if (endZone != null) {
-            builder.append(" to zone ");
-            builder.append(endZone);
-        }
-        builder.append(" on route ");
-        builder.append(route);
-        if (zones.size() > 0) {
-            builder.append(" through zones ");
-            boolean first = true;
-            for (String zone : zones) {
-                if (first) {
-                    first = false;
-                } else {
-                    builder.append(",");
-                }
-                builder.append(zone);
-            }
-        }
-        builder.append(" at ");
-        builder.append(startTime);
-        if (classifier != null) {
-            builder.append(", classified by ");
-            builder.append(classifier.toString());
-        }
-        builder.append(")");
-        return builder.toString();
-    }
-}
 
 /**
  * This fare service impl handles the cases that GTFS handles within a single feed. 
@@ -137,7 +75,7 @@ public class DefaultFareServiceImpl implements FareService, Serializable {
                 rides.add(ride);
                 ride.startZone = hEdge.getStartStop().getZoneId();
                 ride.zones.add(ride.startZone);
-                ride.route = state.getRoute();
+                ride.route = state.getBackTrip() == null ? null : state.getBackTrip().getRoute();
                 ride.startTime = state.getBackState().getTime();
                 ride.firstStop = hEdge.getStartStop();
             }
@@ -154,9 +92,12 @@ public class DefaultFareServiceImpl implements FareService, Serializable {
     // TODO: Overridable classify method for rides / make rides from list<state>
     
     @Override
-    public Fare getCost(GraphPath path) {
-
+    public List<Fare> getCost(GraphPath path) {
         List<Ride> rides = createRides(path);
+        return getCost(rides);
+    }
+
+    protected List<Fare> getCost(List<Ride> rides) {
         // If there are no rides, there's no fare.
         if (rides.size() == 0) {
             return null;
@@ -177,8 +118,8 @@ public class DefaultFareServiceImpl implements FareService, Serializable {
                 fractionDigits = currency.getDefaultFractionDigits();
             int cents = (int) Math.round(lowestCost * Math.pow(10, fractionDigits));
             Fare fare = new Fare();
-            fare.addFare(FareType.regular, wrappedCurrency, cents);
-            return fare;
+            fare.addFare(DefaultFareType.REGULAR, wrappedCurrency, cents);
+            return Collections.singletonList(fare);
         } else {
             return null;
         }
@@ -229,7 +170,7 @@ public class DefaultFareServiceImpl implements FareService, Serializable {
             lastRideStartTime = ride.startTime;
             lastRideEndTime = ride.endTime;
             endZone = ride.endZone;
-            routes.add(ride.route);
+            routes.add(ride.route.getId());
             zones.addAll(ride.zones);
             transfersUsed += 1;
         }

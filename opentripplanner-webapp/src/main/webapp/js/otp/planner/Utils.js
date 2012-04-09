@@ -45,9 +45,9 @@ otp.planner.Utils = {
           'id',
           'description',
           {name: 'viaRoute',     mapping: '@viaRoute'},
-          {name: 'regularFare',  mapping: 'fare', convert: function(val, rec) { return otp.planner.Utils.getFare(rec, 'regular'); }},
-          {name: 'seniorFare',   mapping: 'fare', convert: function(val, rec) { return otp.planner.Utils.getFare(rec, 'senior'); }},
-          {name: 'studentFare',  mapping: 'fare', convert: function(val, rec) { return otp.planner.Utils.getFare(rec, 'student'); }},
+          {name: 'regularFare',  mapping: 'fare',           convert: function(val, rec) { return otp.planner.Utils.getFare(rec, 'REGULAR' ); }},
+          {name: 'seniorFare',   mapping: 'fare',           convert: function(val, rec) { return otp.planner.Utils.getFare(rec, 'SENIOR'  ); }},
+          {name: 'studentFare',  mapping: 'fare',           convert: function(val, rec) { return otp.planner.Utils.getFare(rec, 'STUDENT' ); }},
           {name: 'duration',     mapping: 'duration',       convert: millisToMinutes},
           {name: 'startTime',    mapping: 'startTime',      convert: otp.util.DateUtils.isoDateStringToDate},
           {name: 'endTime',      mapping: 'endTime',        convert: otp.util.DateUtils.isoDateStringToDate},
@@ -192,7 +192,7 @@ otp.planner.Utils = {
      */
     getFare : function(rec, fareType)
     {
-        var nodes = Ext.DomQuery.select('fare/entry', rec);
+        var nodes = Ext.DomQuery.select('totalFare/fare/entry', rec);
         var fare = null;
         for (var i = 0; i < nodes.length; i++)
         {
@@ -201,6 +201,7 @@ otp.planner.Utils = {
                 var cents = parseInt(Ext.DomQuery.selectValue('value/cents', rec));
                 //TODO Use currency in value/currency once available
                 fare = this.formatMoney(cents);
+                break;
             }
         }
 

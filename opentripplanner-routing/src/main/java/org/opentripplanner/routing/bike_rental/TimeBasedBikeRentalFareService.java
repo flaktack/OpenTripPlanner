@@ -22,7 +22,8 @@ import java.util.List;
 
 import org.opentripplanner.common.model.P2;
 import org.opentripplanner.routing.core.Fare;
-import org.opentripplanner.routing.core.Fare.FareType;
+import org.opentripplanner.routing.core.Fare.DefaultFareType;
+import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.core.WrappedCurrency;
 import org.opentripplanner.routing.services.ChainedFareService;
@@ -43,6 +44,8 @@ public class TimeBasedBikeRentalFareService implements ChainedFareService, Seria
     // Each entry is <max time, cents at that time>; the list is sorted in
     // ascending time order
     private List<P2<Integer>> pricing_by_second;
+
+    private String fareName;
 
     private String currency;
 
@@ -87,7 +90,7 @@ public class TimeBasedBikeRentalFareService implements ChainedFareService, Seria
     }
 
     @Override
-    public Fare getCost(GraphPath path) {
+    public List<Fare> getCost(GraphPath path) {
         int cost = 0;
         long start = -1;
 
@@ -117,25 +120,26 @@ public class TimeBasedBikeRentalFareService implements ChainedFareService, Seria
             }
         }
 
-        if (next == null) {
-            Fare fare = new Fare();
-            fare.addFare(FareType.regular, new WrappedCurrency(Currency.getInstance(currency)),
-                    cost);
-            return fare;
-        }
-        if (cost == 0) {
-            return next.getCost(path);
+        List<Fare> fares = null;
+        if(next != null) {
+            fares = next.getCost(path);
         }
 
-        Fare fare = next.getCost(path);
-        if (fare == null) {
-            fare = new Fare();
-            fare.addFare(FareType.regular, new WrappedCurrency(Currency.getInstance(currency)),
-                    cost);
-            return fare;
+        if (cost == 0) {
+            return fares;
         }
-        fare.addCost(cost);
-        return fare;
+
+        Fare fare = new Fare(null, fareName);
+        fare.addFare(DefaultFareType.BICYCLE, new WrappedCurrency(Currency.getInstance(currency)),
+                    cost);
+
+        if(fares == null) {
+            fares = Collections.singletonList(fare);
+        } else {
+            fares.add(fare);
+        }
+
+        return fares;
     }
 
     @Override
@@ -147,4 +151,7 @@ public class TimeBasedBikeRentalFareService implements ChainedFareService, Seria
         this.currency = currency;
     }
 
+    public void setFareName(String name) {
+        this.fareName = name;
+    }
 }
