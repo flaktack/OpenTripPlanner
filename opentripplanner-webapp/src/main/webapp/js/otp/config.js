@@ -95,6 +95,14 @@ otp.config_defaults = {
             walk            : null 
         },
 
+        // The FareTypes to show from the api response, the used locale may contain a FareType -> name mapping
+        fareTypes: [
+            ['BICYCLE', '',    true], // global, shown for all non-global fare types
+            ['REGULAR', ''         ],
+            ['STUDENT', '(student)'],
+            ['SENIOR' , '(senior)' ]
+        ],
+
         linkTemplates  : [
             {name:otp.config.locale.tripPlanner.link.text,  url:'index.html#/' + otp.planner.ParamTemplate}, // TODO - this will cause an error if otp.planner is not defined
             {name:otp.config.locale.tripPlanner.link.trip_separator, separator:true},

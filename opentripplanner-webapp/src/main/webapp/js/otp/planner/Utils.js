@@ -41,7 +41,8 @@ otp.planner.Utils = {
     TRIP_ID            : 'trip',
     TO_ID              : 'to',
 
-    ITIN_RECORD : new Ext.data.Record.create([
+    ITIN_RECORD        : null,
+    ITIN_RECORD_VALUES : [
           'id',
           'description',
           {name: 'viaRoute',     mapping: '@viaRoute'},
@@ -60,8 +61,8 @@ otp.planner.Utils = {
           {name: 'walkTime',     mapping: 'walkTime',       convert: secondsToMinutes},
           {name: 'transitTime',  mapping: 'transitTime',    convert: secondsToMinutes},
           {name: 'waitingTime',  mapping: 'waitingTime',    convert: secondsToMinutes}
-    ]),
-
+    ],
+    
     LEG_RECORD : new Ext.data.Record.create([
           {name: 'id',               mapping: '@id'},
           {name: 'mode',             mapping: '@mode'},
@@ -190,19 +191,13 @@ otp.planner.Utils = {
      *          
      * 
      */
-    getFare : function(rec, fareType)
-    {
-        var nodes = Ext.DomQuery.select('totalFare/fare/entry', rec);
+    getFare : function(rec, fareType) {
+        var nodes = Ext.DomQuery.select('totalFare/fareTypes/fareType[type=' + fareType + ']', rec);
         var fare = null;
-        for (var i = 0; i < nodes.length; i++)
-        {
-            if (Ext.DomQuery.selectValue('key', rec) === fareType)
-            {
-                var cents = parseInt(Ext.DomQuery.selectValue('value/cents', rec));
-                //TODO Use currency in value/currency once available
-                fare = this.formatMoney(cents);
-                break;
-            }
+
+        if(nodes.length) {
+            //TODO Use currency in value/currency once available
+            fare = this.formatMoney(parseInt(nodes[0].getAttribute('cents'), nodes[0].getAttribute('currency')));
         }
 
         // default fare vaules can be specified in config.js;  if we don't have a 
@@ -220,6 +215,41 @@ otp.planner.Utils = {
         return fare;
     },
 
+    getFareInfo: function(rec, fareType) {
+        var data = [];
+        var nodes = Ext.DomQuery.select('fares/fare', rec);
+
+        for(var i = 0; i < nodes.length; i++) {
+            var fd = {
+                agencyId   : nodes[i].getAttribute('agencyId'),
+                agencyName : nodes[i].getAttribute('agencyName'),
+                name       : nodes[i].getAttribute('name'),
+                cost       : null,
+                currency   : null,
+                notes      : []
+            };
+
+            var fts = Ext.DomQuery.select('fareType[global=true]', nodes[i]);
+            if(!fts.length) {
+                fts = Ext.DomQuery.select('fareType[type=' + fareType + ']', nodes[i]);
+            }
+
+            if(fts.length) {
+                var cents = parseInt(fts[0].getAttribute('cents'));
+                fd.currency = fts[0].getAttribute('currency');
+                fd.cost     = this.formatMoney(cents, fd.currency);
+            }
+
+            var notes = Ext.DomQuery.select('note', nodes[i]);
+            for(var j = 0; j < notes.length; ++j) {
+                fd.notes.push( notes[j].innerText || notes[j].textContent );
+            }
+
+            data.push(fd);
+        }
+
+        return data;
+    },
 
     /** 
      * TODO ... neeeds more work  ... trying to get â¬ and à¤°à¥à¤ªà¤¯à¤¾ to work...
@@ -352,6 +382,26 @@ otp.planner.Utils = {
     /** */
     makeItinerariesStore: function()
     {
+        if(!this.ITIN_RECORD) {
+            for(var i = otp.config.planner.fareTypes.length - 1; i >= 0; --i) {
+                var d = otp.config.planner.fareTypes[i];
+
+                (function(a, d) {
+                    a.ITIN_RECORD_VALUES.push({
+                        name: d[0] + 'Fare',
+                        mapping: 'totalFare',
+                        convert: function(val, rec) { return otp.planner.Utils.getFare(rec, d[0]); }
+                    });
+                    a.ITIN_RECORD_VALUES.push({
+                        name: d[0] + 'FareData',
+                        mapping: 'fares',
+                        convert: function(val, rec) { return otp.planner.Utils.getFareInfo(rec, d[0]); }
+                    });
+                })(this, d);
+            }
+            this.ITIN_RECORD = new Ext.data.Record.create(this.ITIN_RECORD_VALUES);
+        }
+
         var retVal = null;
         try
         {

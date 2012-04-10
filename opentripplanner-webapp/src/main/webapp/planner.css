@@ -1079,6 +1079,27 @@ font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
 font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
 }
 
+/* Fare info stuff */
+
+#trip-details td.fare-info:hover {
+cursor: pointer;
+text-decoration: underline;
+}
+
+.fare-info-dialog h1 {
+padding: 1em 1em 0 1em;
+border-bottom: 1px solid black;
+margin-bottom: 0.3em;
+}
+
+.fare-info-dialog h1 span.price {
+float: right;
+}
+
+.fare-info-dialog li {
+padding-left: 1em;
+}
+
 /* CSS Overrides
 These rules fix the broken map widget in Safari and Chrome.
 See http://opentripplanner.org/ticket/257

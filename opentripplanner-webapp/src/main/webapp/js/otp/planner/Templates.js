@@ -102,7 +102,32 @@ otp.planner.Templates = {
                 '<a href="javascript:void(0);" onClick="otp.core.MapStatic.streetview({x}, {y});">{name}</a>'
             ).compile();
 
-        if(this.TP_TRIPDETAILS == null)
+        if(this.TP_TRIPDETAILS == null) {
+            var fareText    = '', // text to insert into template
+                fareLabelIf = ''; // if statement for use with the label, so it only displays once
+
+            for(var i = 0; i < otp.config.planner.fareTypes.length; ++i) {
+                var d = otp.config.planner.fareTypes[i],
+                    k = d[0] + 'Fare', // variable name, should be the same as in planner/Util.js
+                    t = 0 || d[1];  // human readable name
+
+                fareText += '<tpl if="' + k + ' != null"><tr><td>' 
+                if(fareLabelIf) {
+                    fareText += '<tpl if="' + fareLabelIf + '">';
+                    fareText += '<strong>' + this.locale.labels.fare + '</strong>';
+                    fareText += '</tpl>';
+
+                    fareLabelIf += ' && ' + k + ' == null';
+                } else {
+                    fareText += '<strong>' + this.locale.labels.fare + '</strong>';
+                    fareLabelIf = k + ' == null';
+                }
+                fareText += '</td>';
+                fareText += '<td class="fare-info" onclick="Ext.MessageBox.show({modal: false, minWidth: 500, title: \'Fare Info\', cls: \'fare-info-dialog\', msg: this.firstChild.innerHTML})">';
+                fareText += '<div style="display:none">{[this.createFareBox(values.' + k + 'Data' + ')]}</div>';
+                fareText += '{' + k + '} ' + t + '</td></tr></tpl>';
+            }
+
             this.TP_TRIPDETAILS = new Ext.XTemplate(
                 '<div id="trip-details">',
                 '<h3>' + this.locale.labels.trip_details + '</h3>',
@@ -121,17 +146,35 @@ otp.planner.Templates = {
                     //'<tpl if="walkDistance"><tr><td><strong>{distanceVerb}</strong></td><td>{walkDistance}</td></tr></tpl>',
 
                     '<tpl showFareInfo == true">',
-                      '<tpl if="regularFare != null">',
-                        '<tr><td><strong>' + this.locale.labels.fare      + '</strong></td><td>{regularFare}</td></tr>',
-                      '</tpl>',
-                      '<tpl if="studentFare != null"><tr><td></td><td>{studentFare} (student)</td></tr></tpl>',
-                      '<tpl if="seniorFare != null"><tr><td></td><td>{seniorFare} (senior)</td></tr></tpl>',
+                      fareText,
                     '</tpl>',
 
                     '<tr class="valid_date"><td>&nbsp;</td><td>&nbsp;</td></tr>',
                     '<tr class="valid_date"><td></td><td>' + this.locale.labels.valid + ' {[otp.planner.Templates.THIS.prettyDateTime()]}</td></tr>',
-                '</table></div>'
+                '</table></div>',
+                {
+                    createFareBox: function(fares) {
+                        var txt = '';
+                        for(var i = 0; i < fares.length; ++i) {
+                            var fare = fares[i];
+
+                            txt += '<h1>'
+                                +  '<span class="agency">' + (fare.agencyName || fare.agencyId) + '</span> '
+                                +  fare.name
+                                +  ' <span class="price">' + fare.cost + '</span>'
+                                +  '</h1>';
+
+                            txt += '<ul>';
+                            for(var j = 0; j < fare.notes.length; ++j) {
+                                txt += '<li>' + fare.notes[j] + '</li>';
+                            }
+                            txt += '</ul>';
+                        }
+                        return txt;
+                    }
+                }
             ).compile();
+        }
 
         if(this.HEADSIGN == null)
             this.HEADSIGN = '<tpl if="headsign != null && headsign.length &gt; 0"> ' + this.locale.directions.to + ' {headsign}</tpl>';

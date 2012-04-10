@@ -178,17 +178,16 @@ otp.locale.Hungarian = {
         trip_details : "útvonal Details",
         fare         : "Fare",
         fare_symbol  : "\u20ac",
-
-        // TODO  -- used in the Trip Details summary to describe different fares 
-        regular_fare : "",
-        student_fare : "",
-        senior_fare  : "",
-
         travel       : "Travel",
         valid        : "Valid",
         trip_length  : "Time",
         with_a_walk  : "with a walk of",
-        alert_for_rt : "Alert for route"
+        alert_for_rt : "Alert for route",
+
+        // TODO  -- used in the Trip Details summary to describe different fares 
+        REGULAR_fare : "",
+        STUDENT_fare : "",
+        SENIOR_fare  : ""
     },
 
     // see otp.planner.Templates for use -- one output are the itinerary leg headers
