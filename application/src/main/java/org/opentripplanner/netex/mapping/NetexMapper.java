@@ -28,6 +28,8 @@ import org.opentripplanner.transit.model.network.Route;
 import org.opentripplanner.transit.model.organization.Agency;
 import org.opentripplanner.transit.model.site.AreaStop;
 import org.opentripplanner.transit.model.site.GroupStop;
+import org.opentripplanner.transit.model.site.RegularStop;
+import org.opentripplanner.transit.model.site.Station;
 import org.opentripplanner.transit.model.site.StopLocation;
 import org.opentripplanner.transit.model.timetable.Trip;
 import org.rutebanken.netex.model.Authority;
@@ -188,6 +190,7 @@ public class NetexMapper {
     // This is a workaround until versioned entities are supported by OTP
     var tariffZoneMapper = mapTariffZones();
     mapStopPlaceAndQuays(tariffZoneMapper);
+    mapStopPlacesToScheduledStopPoints();
     mapMultiModalStopPlaces();
     mapGroupsOfStopPlaces();
     mapFlexibleStopPlaces();
@@ -454,6 +457,7 @@ public class NetexMapper {
       currentNetexIndex.getJourneyPatternsById(),
       currentNetexIndex.getQuayIdByStopPointRef(),
       currentNetexIndex.getFlexibleStopPlaceByStopPointRef(),
+      currentMapperIndexes.getStopByStopPointRefViaStopPlace(),
       currentNetexIndex.getDestinationDisplayById(),
       currentNetexIndex.getServiceJourneyById(),
       currentNetexIndex.getServiceLinkById(),
@@ -526,6 +530,57 @@ public class NetexMapper {
         currentNetexIndex.getServiceJourneyInterchangeById().localValues()
       );
     }
+  }
+
+  /**
+   * Some data sets (e.g. the Swiss NeTEx) assign a scheduled stop point to a StopPlace without
+   * naming a specific Quay. A stop time, however, needs a concrete stop. For each such assignment we
+   * resolve a {@link RegularStop}: if the StopPlace has exactly one mapped quay we reuse it,
+   * otherwise we create (once per StopPlace) a synthetic stop located at the station centroid. The
+   * result is shared with the trip pattern and service link mapping through {@link
+   * NetexMapperIndexes#getStopByStopPointRefViaStopPlace()}.
+   */
+  private void mapStopPlacesToScheduledStopPoints() {
+    var stopPlaceIdByStopPointRef = currentNetexIndex.getStopPlaceIdByStopPointRef();
+    for (String stopPointRef : stopPlaceIdByStopPointRef.localKeys()) {
+      String stopPlaceId = stopPlaceIdByStopPointRef.lookup(stopPointRef);
+      Station station = transitBuilder
+        .siteRepository()
+        .stationById()
+        .get(idFactory.createId(stopPlaceId));
+      if (station == null) {
+        issueStore.add(
+          "PassengerStopAssignmentStopPlaceNotFound",
+          "Scheduled stop point %s is assigned to unknown stop place %s.",
+          stopPointRef,
+          stopPlaceId
+        );
+        continue;
+      }
+      RegularStop stop = resolveStopForStopPlaceAssignment(station, stopPlaceId);
+      currentMapperIndexes.addStopByStopPointRefViaStopPlace(stopPointRef, stop);
+      transitBuilder.addStopByScheduledStopPoint(idFactory.createId(stopPointRef), stop);
+    }
+  }
+
+  private RegularStop resolveStopForStopPlaceAssignment(Station station, String stopPlaceId) {
+    var childStops = station.getChildStops();
+    if (childStops.size() == 1 && childStops.iterator().next() instanceof RegularStop onlyStop) {
+      return onlyStop;
+    }
+    // The StopPlace has no quays or more than one quay - none of which is the obvious boarding
+    // stop - so we create a single synthetic stop at the station centroid.
+    return transitBuilder
+      .siteRepository()
+      .computeRegularStopIfAbsent(idFactory.createId(stopPlaceId + ":centroid"), id ->
+        transitBuilder
+          .siteRepository()
+          .regularStop(id)
+          .withParentStation(station)
+          .withName(station.getName())
+          .withCoordinate(station.getCoordinate())
+          .build()
+      );
   }
 
   private void mapScheduledStopPointsToQuays() {

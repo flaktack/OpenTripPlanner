@@ -9,6 +9,7 @@ import java.math.BigInteger;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -67,6 +68,8 @@ class StopTimesMapper {
 
   private final ReadOnlyHierarchicalMap<String, String> flexibleStopPlaceIdByStopPointRef;
 
+  private final Map<String, RegularStop> stopByStopPointRefViaStopPlace;
+
   private final ReadOnlyHierarchicalMap<String, Route> routeByid;
 
   private final ReadOnlyHierarchicalMapById<FlexibleLine> flexibleLinesById;
@@ -85,6 +88,7 @@ class StopTimesMapper {
     ReadOnlyHierarchicalMap<String, DestinationDisplay> destinationDisplayById,
     ReadOnlyHierarchicalMap<String, String> quayIdByStopPointRef,
     ReadOnlyHierarchicalMap<String, String> flexibleStopPlaceIdByStopPointRef,
+    Map<String, RegularStop> stopByStopPointRefViaStopPlace,
     ReadOnlyHierarchicalMapById<FlexibleLine> flexibleLinesById,
     ReadOnlyHierarchicalMap<String, Route> routeById
   ) {
@@ -96,6 +100,7 @@ class StopTimesMapper {
     this.groupStopById = groupStopById;
     this.quayIdByStopPointRef = quayIdByStopPointRef;
     this.flexibleStopPlaceIdByStopPointRef = flexibleStopPlaceIdByStopPointRef;
+    this.stopByStopPointRefViaStopPlace = stopByStopPointRefViaStopPlace;
     this.flexibleLinesById = flexibleLinesById;
     this.routeByid = routeById;
     this.headsignMapper = new HeadsignMapper(issueStore);
@@ -375,8 +380,10 @@ class StopTimesMapper {
 
     String stopId = quayIdByStopPointRef.lookup(stopPointRef);
     String flexibleStopPlaceId = flexibleStopPlaceIdByStopPointRef.lookup(stopPointRef);
+    // Resolved from a PassengerStopAssignment that referenced a StopPlace instead of a Quay.
+    RegularStop stopPlaceStop = stopByStopPointRefViaStopPlace.get(stopPointRef);
 
-    if (stopId == null && flexibleStopPlaceId == null) {
+    if (stopId == null && flexibleStopPlaceId == null && stopPlaceStop == null) {
       issueStore.add(
         "PassengerStopAssignmentNotFound",
         "No passengerStopAssignment found for %s",
@@ -388,6 +395,8 @@ class StopTimesMapper {
     StopLocation stopLocation;
     if (stopId != null) {
       stopLocation = stopsById.get(idFactory.createId(stopId));
+    } else if (stopPlaceStop != null) {
+      stopLocation = stopPlaceStop;
     } else {
       AreaStop areaStop = flexibleStopLocationsById.get(idFactory.createId(flexibleStopPlaceId));
       GroupStop groupStop = groupStopById.get(idFactory.createId(flexibleStopPlaceId));

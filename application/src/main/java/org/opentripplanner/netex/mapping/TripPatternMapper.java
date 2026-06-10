@@ -98,6 +98,7 @@ class TripPatternMapper {
     ReadOnlyHierarchicalMap<String, JourneyPattern_VersionStructure> journeyPatternById,
     ReadOnlyHierarchicalMap<String, String> quayIdByStopPointRef,
     ReadOnlyHierarchicalMap<String, String> flexibleStopPlaceIdByStopPointRef,
+    Map<String, RegularStop> stopByStopPointRefViaStopPlace,
     ReadOnlyHierarchicalMap<String, DestinationDisplay> destinationDisplayById,
     ReadOnlyHierarchicalMap<String, ServiceJourney> serviceJourneyById,
     ReadOnlyHierarchicalMapById<ServiceLink> serviceLinkById,
@@ -133,6 +134,7 @@ class TripPatternMapper {
       destinationDisplayById,
       quayIdByStopPointRef,
       flexibleStopPlaceIdByStopPointRef,
+      stopByStopPointRefViaStopPlace,
       flexibleLineById,
       routeById
     );
@@ -140,6 +142,7 @@ class TripPatternMapper {
       idFactory,
       serviceLinkById,
       quayIdByStopPointRef,
+      stopByStopPointRefViaStopPlace,
       stopById,
       issueStore,
       maxStopToShapeSnapDistance

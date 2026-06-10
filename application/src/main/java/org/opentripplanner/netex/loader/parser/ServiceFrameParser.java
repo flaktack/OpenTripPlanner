@@ -58,6 +58,8 @@ class ServiceFrameParser extends NetexParser<Service_VersionFrameStructure> {
 
   private final Map<String, String> quayIdByStopPointRef = new HashMap<>();
 
+  private final Map<String, String> stopPlaceIdByStopPointRef = new HashMap<>();
+
   private final Map<String, String> flexibleStopPlaceByStopPointRef = new HashMap<>();
 
   private final Collection<ServiceLink> serviceLinks = new ArrayList<>();
@@ -69,7 +71,9 @@ class ServiceFrameParser extends NetexParser<Service_VersionFrameStructure> {
   }
 
   static void logSummary() {
-    PASSENGER_STOP_ASSIGNMENT_LOGGER.logTotal("PassengerStopAssignment with empty quay ref.");
+    PASSENGER_STOP_ASSIGNMENT_LOGGER.logTotal(
+      "PassengerStopAssignment with neither quay ref nor stop place ref."
+    );
   }
 
   @Override
@@ -129,6 +133,7 @@ class ServiceFrameParser extends NetexParser<Service_VersionFrameStructure> {
     index.networkById.addAll(networks);
     noticeParser.setResultOnIndex(index);
     index.quayIdByStopPointRef.addAll(quayIdByStopPointRef);
+    index.stopPlaceIdByStopPointRef.addAll(stopPlaceIdByStopPointRef);
     index.flexibleStopPlaceByStopPointRef.addAll(flexibleStopPlaceByStopPointRef);
     index.routeById.addAll(routes);
     index.serviceLinkById.addAll(serviceLinks);
@@ -144,15 +149,22 @@ class ServiceFrameParser extends NetexParser<Service_VersionFrameStructure> {
 
     for (JAXBElement<?> stopAssignment : stopAssignments.getStopAssignment()) {
       if (stopAssignment.getValue() instanceof PassengerStopAssignment assignment) {
-        if (assignment.getQuayRef() == null) {
-          PASSENGER_STOP_ASSIGNMENT_LOGGER.info(
-            "PassengerStopAssignment with empty quay ref is dropped. Assigment: {}",
-            assignment.getId()
+        String stopPointRef = assignment.getScheduledStopPointRef().getValue().getRef();
+        if (assignment.getQuayRef() != null) {
+          quayIdByStopPointRef.put(stopPointRef, assignment.getQuayRef().getValue().getRef());
+        } else if (assignment.getStopPlaceRef() != null) {
+          // Some data sets (e.g. the Swiss NeTEx) assign a ScheduledStopPoint to a StopPlace
+          // without naming a specific Quay. These are resolved to a concrete stop later in the
+          // mapping step, see NetexMapper#mapStopPlacesToScheduledStopPoints.
+          stopPlaceIdByStopPointRef.put(
+            stopPointRef,
+            assignment.getStopPlaceRef().getValue().getRef()
           );
         } else {
-          String quayRef = assignment.getQuayRef().getValue().getRef();
-          String stopPointRef = assignment.getScheduledStopPointRef().getValue().getRef();
-          quayIdByStopPointRef.put(stopPointRef, quayRef);
+          PASSENGER_STOP_ASSIGNMENT_LOGGER.info(
+            "PassengerStopAssignment with neither quay ref nor stop place ref is dropped. Assigment: {}",
+            assignment.getId()
+          );
         }
       } else if (stopAssignment.getValue() instanceof FlexibleStopAssignment assignment) {
         if (OTPFeature.FlexRouting.isOn()) {

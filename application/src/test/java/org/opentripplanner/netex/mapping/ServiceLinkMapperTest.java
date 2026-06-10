@@ -7,6 +7,7 @@ import jakarta.xml.bind.JAXBElement;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import net.opengis.gml._3.DirectPositionListType;
 import net.opengis.gml._3.DirectPositionType;
 import net.opengis.gml._3.LineStringType;
@@ -137,6 +138,7 @@ class ServiceLinkMapperTest {
       ID_FACTORY,
       serviceLinksById,
       quayIdByStopPointRef,
+      Map.of(),
       stopsById,
       issueStore,
       150
