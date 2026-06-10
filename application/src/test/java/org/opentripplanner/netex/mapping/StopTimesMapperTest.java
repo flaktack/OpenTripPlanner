@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.math.BigInteger;
 import java.time.Duration;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -19,6 +20,7 @@ import org.opentripplanner.netex.index.hierarchy.HierarchicalMap;
 import org.opentripplanner.netex.index.hierarchy.HierarchicalMapById;
 import org.opentripplanner.transit.model._data.TransitRepositoryForTest;
 import org.opentripplanner.transit.model.framework.DefaultEntityById;
+import org.opentripplanner.transit.model.site.RegularStop;
 import org.opentripplanner.transit.model.timetable.Trip;
 import org.rutebanken.netex.model.StopPointInJourneyPattern;
 import org.rutebanken.netex.model.TimetabledPassingTime;
@@ -52,6 +54,7 @@ public class StopTimesMapperTest {
       sample.getDestinationDisplayById(),
       sample.getQuayIdByStopPointRef(),
       new HierarchicalMap<>(),
+      Map.of(),
       new HierarchicalMapById<>(),
       new HierarchicalMap<>()
     );
@@ -142,6 +145,7 @@ public class StopTimesMapperTest {
       netexSample.getDestinationDisplayById(),
       netexSample.getQuayIdByStopPointRef(),
       new HierarchicalMap<>(),
+      Map.of(),
       new HierarchicalMapById<>(),
       new HierarchicalMap<>()
     );
@@ -176,6 +180,50 @@ public class StopTimesMapperTest {
       () ->
         assertNotEquals(1, stopTimes.get(3).getTimepoint(), "StopTime expected to not be waitPoint")
     );
+  }
+
+  /**
+   * When a scheduled stop point is assigned to a StopPlace (and not a Quay), the stop is resolved
+   * up-front and supplied through the {@code stopByStopPointRefViaStopPlace} map. The quay-based
+   * index is empty here, so the StopTime can only resolve through that fallback.
+   */
+  @Test
+  public void testMapStopTimesResolvedViaStopPlace() {
+    NetexTestDataSample sample = new NetexTestDataSample();
+
+    Map<String, RegularStop> stopByStopPointRefViaStopPlace = new HashMap<>();
+    var quayIdByStopPointRef = sample.getQuayIdByStopPointRef();
+    for (String stopPointRef : quayIdByStopPointRef.localKeys()) {
+      var quayId = quayIdByStopPointRef.lookup(stopPointRef);
+      var stop = sample.getStopsById().get(MappingSupport.ID_FACTORY.createId(quayId));
+      stopByStopPointRefViaStopPlace.put(stopPointRef, stop);
+    }
+
+    StopTimesMapper stopTimesMapper = new StopTimesMapper(
+      DataImportIssueStore.NOOP,
+      MappingSupport.ID_FACTORY,
+      sample.getStopsById(),
+      new DefaultEntityById<>(),
+      new DefaultEntityById<>(),
+      sample.getDestinationDisplayById(),
+      new HierarchicalMap<>(),
+      new HierarchicalMap<>(),
+      stopByStopPointRefViaStopPlace,
+      new HierarchicalMapById<>(),
+      new HierarchicalMap<>()
+    );
+
+    StopTimesMapperResult result = stopTimesMapper.mapToStopTimes(
+      sample.getJourneyPattern(),
+      TRIP,
+      sample.getTimetabledPassingTimes(),
+      null
+    );
+
+    List<StopTime> stopTimes = result.stopTimes;
+    assertEquals(4, stopTimes.size());
+    assertEquals("NSR:Quay:1", stopTimes.get(0).getStop().getId().getId());
+    assertEquals("NSR:Quay:4", stopTimes.get(3).getStop().getId().getId());
   }
 
   private void assertStop(

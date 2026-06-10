@@ -58,6 +58,16 @@ public class NetexEntityIndexTest {
   }
 
   @Test
+  public void lookupStopPlaceIdByStopPointRef() {
+    root.stopPlaceIdByStopPointRef.add(ID, REF);
+    child.stopPlaceIdByStopPointRef.add(ID, REF_2);
+
+    assertEquals(REF, root.stopPlaceIdByStopPointRef.lookup(ID));
+    assertEquals(REF_2, child.stopPlaceIdByStopPointRef.lookup(ID));
+    assertNull(root.stopPlaceIdByStopPointRef.lookup(ID_2));
+  }
+
+  @Test
   public void lookupQuayById() {
     Quay quayA = quay(ID, null);
     Quay quayB = quay(ID, "image_1");

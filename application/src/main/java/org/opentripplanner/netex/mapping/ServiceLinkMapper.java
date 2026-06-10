@@ -4,6 +4,7 @@ import jakarta.xml.bind.JAXBElement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import javax.annotation.Nullable;
 import net.opengis.gml._3.DirectPositionType;
 import net.opengis.gml._3.LineStringType;
@@ -39,6 +40,7 @@ class ServiceLinkMapper {
   private final FeedScopedIdFactory idFactory;
   private final ReadOnlyHierarchicalMapById<ServiceLink> serviceLinkById;
   private final ReadOnlyHierarchicalMap<String, String> quayIdByStopPointRef;
+  private final Map<String, RegularStop> stopByStopPointRefViaStopPlace;
   private final ImmutableEntityById<RegularStop> stopById;
   private final DataImportIssueStore issueStore;
   private final double maxStopToShapeSnapDistance;
@@ -47,6 +49,7 @@ class ServiceLinkMapper {
     FeedScopedIdFactory idFactory,
     ReadOnlyHierarchicalMapById<ServiceLink> serviceLinkById,
     ReadOnlyHierarchicalMap<String, String> quayIdByStopPointRef,
+    Map<String, RegularStop> stopByStopPointRefViaStopPlace,
     ImmutableEntityById<RegularStop> stopById,
     DataImportIssueStore issueStore,
     double maxStopToShapeSnapDistance
@@ -54,6 +57,7 @@ class ServiceLinkMapper {
     this.idFactory = idFactory;
     this.serviceLinkById = serviceLinkById;
     this.quayIdByStopPointRef = quayIdByStopPointRef;
+    this.stopByStopPointRefViaStopPlace = stopByStopPointRefViaStopPlace;
     this.stopById = stopById;
     this.issueStore = issueStore;
     this.maxStopToShapeSnapDistance = maxStopToShapeSnapDistance;
@@ -192,11 +196,11 @@ class ServiceLinkMapper {
     StopPattern stopPattern,
     int stopIndex
   ) {
-    String fromPointQuayId = quayIdByStopPointRef.lookup(serviceLink.getFromPointRef().getRef());
-    RegularStop fromPointStop = stopById.get(idFactory.createId(fromPointQuayId));
+    String fromPointRef = serviceLink.getFromPointRef().getRef();
+    RegularStop fromPointStop = lookupStop(fromPointRef);
 
-    String toPointQuayId = quayIdByStopPointRef.lookup(serviceLink.getToPointRef().getRef());
-    RegularStop toPointStop = stopById.get(idFactory.createId(toPointQuayId));
+    String toPointRef = serviceLink.getToPointRef().getRef();
+    RegularStop toPointStop = lookupStop(toPointRef);
 
     if (fromPointStop == null || toPointStop == null) {
       issueStore.add(
@@ -211,7 +215,7 @@ class ServiceLinkMapper {
         "Service link %s with quays different from point in journey pattern. Link point: %s, journey pattern point: %s",
         serviceLink,
         stopPattern.getStop(stopIndex).getId().getId(),
-        fromPointQuayId
+        fromPointRef
       );
       return false;
     } else if (!toPointStop.equals(stopPattern.getStop(stopIndex + 1))) {
@@ -220,11 +224,27 @@ class ServiceLinkMapper {
         "Service link %s with quays different to point in journey pattern. Link point: %s, journey pattern point: %s",
         serviceLink,
         stopPattern.getStop(stopIndex).getId().getId(),
-        toPointQuayId
+        toPointRef
       );
       return false;
     }
     return true;
+  }
+
+  /**
+   * Resolve the stop for a scheduled stop point, preferring the Quay-based assignment and falling
+   * back to a StopPlace-based assignment (see {@code NetexMapper#mapStopPlacesToScheduledStopPoints}).
+   */
+  @Nullable
+  private RegularStop lookupStop(String stopPointRef) {
+    String quayId = quayIdByStopPointRef.lookup(stopPointRef);
+    if (quayId != null) {
+      RegularStop stop = stopById.get(idFactory.createId(quayId));
+      if (stop != null) {
+        return stop;
+      }
+    }
+    return stopByStopPointRefViaStopPlace.get(stopPointRef);
   }
 
   private List<Double> getLineStringCoordinates(LineStringType lineString) {

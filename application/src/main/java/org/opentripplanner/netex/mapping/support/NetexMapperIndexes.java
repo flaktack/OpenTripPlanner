@@ -7,6 +7,7 @@ import java.util.Map;
 import org.opentripplanner.model.StopTime;
 import org.opentripplanner.netex.index.api.NetexEntityIndexReadOnlyView;
 import org.opentripplanner.netex.index.api.ReadOnlyHierarchicalMapById;
+import org.opentripplanner.transit.model.site.RegularStop;
 import org.opentripplanner.transit.model.site.Station;
 import org.rutebanken.netex.model.DatedServiceJourney;
 
@@ -25,6 +26,14 @@ public class NetexMapperIndexes {
   private final Multimap<String, Station> stationsByMultiModalStationRfs;
   private final Map<String, StopTime> stopTimesByNetexId;
   private final Multimap<String, DatedServiceJourney> datedServiceJourneysBySjId;
+
+  /**
+   * Stop resolved for a scheduled stop point that was assigned to a StopPlace (and not a Quay) in a
+   * PassengerStopAssignment. The key is the scheduled stop point ref. See {@code
+   * NetexMapper#mapStopPlacesToScheduledStopPoints}.
+   */
+  private final Map<String, RegularStop> stopByStopPointRefViaStopPlace;
+
   private NetexMapperIndexes parent;
 
   public NetexMapperIndexes(NetexEntityIndexReadOnlyView index, NetexMapperIndexes parent) {
@@ -34,6 +43,7 @@ public class NetexMapperIndexes {
       this.datedServiceJourneysBySjId = indexDSJBySJId(index.getDatedServiceJourneys());
       this.stationsByMultiModalStationRfs = ArrayListMultimap.create();
       this.stopTimesByNetexId = new HashMap<>();
+      this.stopByStopPointRefViaStopPlace = new HashMap<>();
     } else {
       // Cached by level(shared files, shared group files and group files). If any entries exist at
       // the current level, then they will hide entries at a higher level.
@@ -46,6 +56,7 @@ public class NetexMapperIndexes {
       // mapping.
       this.stationsByMultiModalStationRfs = parent.stationsByMultiModalStationRfs;
       this.stopTimesByNetexId = parent.stopTimesByNetexId;
+      this.stopByStopPointRefViaStopPlace = parent.stopByStopPointRefViaStopPlace;
     }
   }
 
@@ -73,6 +84,14 @@ public class NetexMapperIndexes {
 
   public void addStopTimesByNetexId(Map<String, StopTime> stopTimesByNetexId) {
     this.stopTimesByNetexId.putAll(stopTimesByNetexId);
+  }
+
+  public Map<String, RegularStop> getStopByStopPointRefViaStopPlace() {
+    return stopByStopPointRefViaStopPlace;
+  }
+
+  public void addStopByStopPointRefViaStopPlace(String stopPointRef, RegularStop stop) {
+    this.stopByStopPointRefViaStopPlace.put(stopPointRef, stop);
   }
 
   public Multimap<String, DatedServiceJourney> getDatedServiceJourneysBySjId() {
