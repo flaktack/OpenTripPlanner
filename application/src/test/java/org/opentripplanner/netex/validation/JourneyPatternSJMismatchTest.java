@@ -78,4 +78,28 @@ class JourneyPatternSJMismatchTest {
 
     assertEquals(OK, rule.validate(journey));
   }
+
+  @Test
+  void passThroughWithPassingTimes() {
+    // Some feeds (e.g. Swiss/OPENOV) give passthrough stops a passing time, so the journey
+    // references every point in the pattern, including the passthrough one.
+    var pattern = new ServiceJourneyPatternBuilder(PATTERN_ID)
+      .addStopPointInSequence(1, ACCESS)
+      .addStopPointInSequence(2, PASSTHROUGH)
+      .addStopPointInSequence(3, ACCESS)
+      .build();
+
+    var index = new NetexEntityIndex();
+    index.journeyPatternsById.add(pattern);
+
+    var journey = new ServiceJourneyBuilder(JOURNEY_ID)
+      .withPatternId(PATTERN_ID)
+      .withPassingTimes(List.of("P-1", "P-2", "P-3"))
+      .build();
+
+    var rule = new JourneyPatternSJMismatch();
+    rule.setup(index.readOnlyView());
+
+    assertEquals(OK, rule.validate(journey));
+  }
 }

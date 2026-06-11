@@ -1,18 +1,23 @@
 package org.opentripplanner.netex.validation;
 
-import java.util.function.Predicate;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.opentripplanner.graph_builder.issue.api.DataImportIssue;
+import org.rutebanken.netex.model.EntityStructure;
 import org.rutebanken.netex.model.JourneyPattern_VersionStructure;
 import org.rutebanken.netex.model.PointInLinkSequence_VersionedChildStructure;
 import org.rutebanken.netex.model.ServiceJourney;
 import org.rutebanken.netex.model.StopPointInJourneyPattern;
 import org.rutebanken.netex.model.StopUseEnumeration;
+import org.rutebanken.netex.model.TimetabledPassingTime;
 
 /**
  * Validates that the number of passing times in the journey and the number of stop points in the
  * pattern are equal.
- * It also takes into account that some points in the pattern can be set to stopUse=passthrough
- * which means that those must not be referenced in the journey.
+ * <p>
+ * Points set to stopUse=passthrough are excluded from both counts: some profiles omit them from the
+ * journey (no passing time), while others (e.g. the Swiss/OPENOV feed) do give them a passing time.
+ * Excluding them on both sides accepts either modelling without flagging a false mismatch.
  */
 class JourneyPatternSJMismatch extends AbstractHMapValidationRule<String, ServiceJourney> {
 
@@ -22,16 +27,40 @@ class JourneyPatternSJMismatch extends AbstractHMapValidationRule<String, Servic
       .getJourneyPatternsById()
       .lookup(getPatternId(sj));
 
-    int nStopPointsInJourneyPattern = (int) journeyPattern
+    var points = journeyPattern
       .getPointsInSequence()
-      .getPointInJourneyPatternOrStopPointInJourneyPatternOrTimingPointInJourneyPattern()
+      .getPointInJourneyPatternOrStopPointInJourneyPatternOrTimingPointInJourneyPattern();
+
+    Set<String> passThroughPointIds = points
       .stream()
-      .filter(Predicate.not(JourneyPatternSJMismatch::isPassThrough))
+      .filter(JourneyPatternSJMismatch::isPassThrough)
+      .map(EntityStructure::getId)
+      .collect(Collectors.toSet());
+
+    int nStopPointsInJourneyPattern = points.size() - passThroughPointIds.size();
+
+    long nTimetablePassingTimes = sj
+      .getPassingTimes()
+      .getTimetabledPassingTime()
+      .stream()
+      .filter(passingTime -> !referencesPassThrough(passingTime, passThroughPointIds))
       .count();
 
-    int nTimetablePassingTimes = sj.getPassingTimes().getTimetabledPassingTime().size();
-
     return nStopPointsInJourneyPattern != nTimetablePassingTimes ? Status.DISCARD : Status.OK;
+  }
+
+  /**
+   * Does this passing time refer to a stop point that the vehicle passes through? Such passing
+   * times are optional, so they are not counted against the (passthrough-excluded) pattern size.
+   */
+  private static boolean referencesPassThrough(
+    TimetabledPassingTime passingTime,
+    Set<String> passThroughPointIds
+  ) {
+    var ref = passingTime.getPointInJourneyPatternRef();
+    return (
+      ref != null && ref.getValue() != null && passThroughPointIds.contains(ref.getValue().getRef())
+    );
   }
 
   /**
