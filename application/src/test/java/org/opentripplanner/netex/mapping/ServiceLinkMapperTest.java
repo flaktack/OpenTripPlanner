@@ -34,6 +34,7 @@ import org.rutebanken.netex.model.LinkSequenceProjection;
 import org.rutebanken.netex.model.LinkSequenceProjection_VersionStructure;
 import org.rutebanken.netex.model.LinksInJourneyPattern_RelStructure;
 import org.rutebanken.netex.model.LocationStructure;
+import org.rutebanken.netex.model.PointsInJourneyPattern_RelStructure;
 import org.rutebanken.netex.model.Projections_RelStructure;
 import org.rutebanken.netex.model.Quay;
 import org.rutebanken.netex.model.ScheduledStopPointRefStructure;
@@ -41,6 +42,7 @@ import org.rutebanken.netex.model.ServiceLink;
 import org.rutebanken.netex.model.ServiceLinkInJourneyPattern_VersionedChildStructure;
 import org.rutebanken.netex.model.ServiceLinkRefStructure;
 import org.rutebanken.netex.model.SimplePoint_VersionStructure;
+import org.rutebanken.netex.model.StopPointInJourneyPattern;
 
 class ServiceLinkMapperTest {
 
@@ -60,6 +62,8 @@ class ServiceLinkMapperTest {
   private StopPattern.StopPatternBuilder stopPatternBuilder;
   private ServiceLinkMapper serviceLinkMapper;
   private DataImportIssueStore issueStore;
+  private HierarchicalMap<String, String> quayIdByStopPointRef;
+  private EntityById<RegularStop> stopsById;
 
   @BeforeEach
   void setUpTestData() {
@@ -102,12 +106,12 @@ class ServiceLinkMapperTest {
 
     List<Quay> quaysById = List.of(quay1, quay2, quay3);
 
-    HierarchicalMap<String, String> quayIdByStopPointRef = new HierarchicalMap<>();
+    quayIdByStopPointRef = new HierarchicalMap<>();
     quayIdByStopPointRef.add("RUT:StopPoint:1", "NSR:Quay:1");
     quayIdByStopPointRef.add("RUT:StopPoint:2", "NSR:Quay:2");
     quayIdByStopPointRef.add("RUT:StopPoint:3", "NSR:Quay:3");
 
-    EntityById<RegularStop> stopsById = new DefaultEntityById<>();
+    stopsById = new DefaultEntityById<>();
     issueStore = new DefaultDataImportIssueStore();
 
     QuayMapper quayMapper = new QuayMapper(
@@ -261,6 +265,211 @@ class ServiceLinkMapperTest {
     assertEquals(QUAY2_COORDINATES[1], coordinates[0].getX(), FLOATING_POINT_COMPARISON_PRECISION);
     assertEquals(QUAY3_COORDINATES[0], coordinates[1].getY(), FLOATING_POINT_COMPARISON_PRECISION);
     assertEquals(QUAY3_COORDINATES[1], coordinates[1].getX(), FLOATING_POINT_COMPARISON_PRECISION);
+  }
+
+  /**
+   * NeTEx lets a link carry its geometry directly as well as through a LinkSequenceProjection --
+   * {@code LinkGroup} declares the two as optional siblings -- and the Austrian and Italian national
+   * feeds use the direct form exclusively. Reading only the projection turns every one of those into
+   * a straight line.
+   */
+  @Test
+  void testMapServiceLinkWithDirectLineString() {
+    var serviceLinksById = new HierarchicalMapById<ServiceLink>();
+    serviceLinksById.add(
+      withDirectLineString(
+        createServiceLink("RUT:ServiceLink:1", "RUT:StopPoint:1", "RUT:StopPoint:2", new Double[] {
+          SERVICE_LINKS_COORDINATES[0],
+          SERVICE_LINKS_COORDINATES[1],
+          SERVICE_LINKS_COORDINATES[2],
+          SERVICE_LINKS_COORDINATES[3],
+        })
+      )
+    );
+
+    List<LineString> shape = mapperFor(serviceLinksById).getGeometriesByJourneyPattern(
+      journeyPatternWithLinks("RUT:ServiceLink:1"),
+      twoStopPattern()
+    );
+
+    assertEquals(0, issueStore.listIssues().size());
+    Coordinate[] coordinates = shape.get(0).getCoordinates();
+    assertEquals(
+      SERVICE_LINKS_COORDINATES[0],
+      coordinates[0].getY(),
+      FLOATING_POINT_COMPARISON_PRECISION
+    );
+    assertEquals(
+      SERVICE_LINKS_COORDINATES[3],
+      coordinates[1].getX(),
+      FLOATING_POINT_COMPARISON_PRECISION
+    );
+  }
+
+  /**
+   * A link with neither encoding is still reported, so removing the projection requirement does not
+   * make a genuinely geometry-less link silent.
+   */
+  @Test
+  void testServiceLinkWithoutAnyGeometryIsReported() {
+    var serviceLinksById = new HierarchicalMapById<ServiceLink>();
+    serviceLinksById.add(
+      new ServiceLink()
+        .withId("RUT:ServiceLink:1")
+        .withFromPointRef(new ScheduledStopPointRefStructure().withRef("RUT:StopPoint:1"))
+        .withToPointRef(new ScheduledStopPointRefStructure().withRef("RUT:StopPoint:2"))
+    );
+
+    List<LineString> shape = mapperFor(serviceLinksById).getGeometriesByJourneyPattern(
+      journeyPatternWithLinks("RUT:ServiceLink:1"),
+      twoStopPattern()
+    );
+
+    assertEquals(1, issueStore.listIssues().size());
+    assertEquals(
+      "MissingProjectionInServiceLink",
+      issueStore.listIssues().get(0).getType(),
+      "a link with no geometry at all is still an issue"
+    );
+    // Straight line between the two quays.
+    Coordinate[] coordinates = shape.get(0).getCoordinates();
+    assertEquals(QUAY1_COORDINATES[0], coordinates[0].getY(), FLOATING_POINT_COMPARISON_PRECISION);
+    assertEquals(QUAY2_COORDINATES[1], coordinates[1].getX(), FLOATING_POINT_COMPARISON_PRECISION);
+  }
+
+  /**
+   * The Italian national feeds publish no linksInSequence at all -- they put the link on each point
+   * as an OnwardServiceLinkRef, which is equally valid. Reading only linksInSequence loses their
+   * geometry silently, without even an issue to show for it.
+   */
+  @Test
+  void testMapServiceLinksFromOnwardServiceLinkRef() {
+    JourneyPattern journeyPattern = new JourneyPattern().withId("RUT:JourneyPattern:1300");
+    journeyPattern.setPointsInSequence(
+      new PointsInJourneyPattern_RelStructure().withPointInJourneyPatternOrStopPointInJourneyPatternOrTimingPointInJourneyPattern(
+        new StopPointInJourneyPattern()
+          .withId("RUT:StopPointInJourneyPattern:1")
+          .withOnwardServiceLinkRef(new ServiceLinkRefStructure().withRef("RUT:ServiceLink:1")),
+        new StopPointInJourneyPattern()
+          .withId("RUT:StopPointInJourneyPattern:2")
+          .withOnwardServiceLinkRef(new ServiceLinkRefStructure().withRef("RUT:ServiceLink:2")),
+        new StopPointInJourneyPattern().withId("RUT:StopPointInJourneyPattern:3")
+      )
+    );
+
+    List<LineString> shape = serviceLinkMapper.getGeometriesByJourneyPattern(
+      journeyPattern,
+      stopPatternBuilder.build()
+    );
+
+    assertEquals(0, issueStore.listIssues().size());
+    // The same two hops testMapValidServiceLinks asserts, reached through the other encoding.
+    assertEquals(
+      SERVICE_LINKS_COORDINATES[0],
+      shape.get(0).getCoordinates()[0].getY(),
+      FLOATING_POINT_COMPARISON_PRECISION
+    );
+    assertEquals(
+      SERVICE_LINKS_COORDINATES[4],
+      shape.get(1).getCoordinates()[1].getY(),
+      FLOATING_POINT_COMPARISON_PRECISION
+    );
+  }
+
+  /**
+   * linksInSequence wins when a pattern carries both: it is the container the hop count is checked
+   * against.
+   */
+  @Test
+  void testLinksInSequenceTakesPrecedenceOverOnwardServiceLinkRef() {
+    JourneyPattern journeyPattern = journeyPatternWithLinks(
+      "RUT:ServiceLink:1",
+      "RUT:ServiceLink:2"
+    );
+    journeyPattern.setPointsInSequence(
+      new PointsInJourneyPattern_RelStructure().withPointInJourneyPatternOrStopPointInJourneyPatternOrTimingPointInJourneyPattern(
+        new StopPointInJourneyPattern()
+          .withId("RUT:StopPointInJourneyPattern:1")
+          .withOnwardServiceLinkRef(
+            new ServiceLinkRefStructure().withRef("RUT:ServiceLink:doesNotExist")
+          ),
+        new StopPointInJourneyPattern().withId("RUT:StopPointInJourneyPattern:2")
+      )
+    );
+
+    List<LineString> shape = serviceLinkMapper.getGeometriesByJourneyPattern(
+      journeyPattern,
+      stopPatternBuilder.build()
+    );
+
+    assertEquals(0, issueStore.listIssues().size(), "the bad onward ref was never read");
+    assertEquals(
+      SERVICE_LINKS_COORDINATES[0],
+      shape.get(0).getCoordinates()[0].getY(),
+      FLOATING_POINT_COMPARISON_PRECISION
+    );
+  }
+
+  /** A pattern with neither encoding still falls back to straight lines, and stays silent. */
+  @Test
+  void testPatternWithoutAnyLinksIsSilent() {
+    List<LineString> shape = serviceLinkMapper.getGeometriesByJourneyPattern(
+      new JourneyPattern().withId("RUT:JourneyPattern:1300"),
+      stopPatternBuilder.build()
+    );
+
+    assertEquals(0, issueStore.listIssues().size());
+    assertEquals(2, shape.size());
+    assertEquals(
+      QUAY1_COORDINATES[0],
+      shape.get(0).getCoordinates()[0].getY(),
+      FLOATING_POINT_COMPARISON_PRECISION
+    );
+  }
+
+  private ServiceLinkMapper mapperFor(HierarchicalMapById<ServiceLink> serviceLinksById) {
+    return new ServiceLinkMapper(
+      ID_FACTORY,
+      serviceLinksById,
+      quayIdByStopPointRef,
+      Map.of(),
+      stopsById,
+      issueStore,
+      150
+    );
+  }
+
+  private StopPattern twoStopPattern() {
+    StopPattern.StopPatternBuilder builder = StopPattern.create(2);
+    builder.stops.with(0, stopsById.get(ID_FACTORY.createId("NSR:Quay:1")));
+    builder.stops.with(1, stopsById.get(ID_FACTORY.createId("NSR:Quay:2")));
+    return builder.build();
+  }
+
+  private JourneyPattern journeyPatternWithLinks(String... serviceLinkRefs) {
+    var links = new LinksInJourneyPattern_RelStructure();
+    for (String ref : serviceLinkRefs) {
+      links.withServiceLinkInJourneyPatternOrTimingLinkInJourneyPattern(
+        new ServiceLinkInJourneyPattern_VersionedChildStructure().withServiceLinkRef(
+          new ServiceLinkRefStructure().withRef(ref)
+        )
+      );
+    }
+    JourneyPattern journeyPattern = new JourneyPattern().withId("RUT:JourneyPattern:1300");
+    journeyPattern.setLinksInSequence(links);
+    return journeyPattern;
+  }
+
+  /** Move a link's geometry out of its projection and onto the link itself. */
+  private ServiceLink withDirectLineString(ServiceLink serviceLink) {
+    var lineString = (
+      (LinkSequenceProjection) serviceLink
+        .getProjections()
+        .getProjectionRefOrProjection()
+        .get(0)
+        .getValue()
+    ).getLineString();
+    return serviceLink.withProjections(null).withLineString(lineString);
   }
 
   private SimplePoint_VersionStructure getLocation(double latitude, double longitude) {
