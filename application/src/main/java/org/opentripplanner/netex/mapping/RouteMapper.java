@@ -1,6 +1,7 @@
 package org.opentripplanner.netex.mapping;
 
 import com.google.common.collect.Multimap;
+import jakarta.xml.bind.JAXBElement;
 import jakarta.xml.bind.annotation.adapters.HexBinaryAdapter;
 import java.util.Collection;
 import java.util.HashSet;
@@ -21,6 +22,7 @@ import org.opentripplanner.transit.model.organization.Agency;
 import org.opentripplanner.transit.model.organization.Branding;
 import org.opentripplanner.transit.model.organization.Operator;
 import org.rutebanken.netex.model.AllVehicleModesOfTransportEnumeration;
+import org.rutebanken.netex.model.AuthorityRefStructure;
 import org.rutebanken.netex.model.BrandingRefStructure;
 import org.rutebanken.netex.model.FlexibleLine_VersionStructure;
 import org.rutebanken.netex.model.GroupOfLinesRefStructure;
@@ -28,6 +30,8 @@ import org.rutebanken.netex.model.Line_VersionStructure;
 import org.rutebanken.netex.model.Network;
 import org.rutebanken.netex.model.OperatorRefStructure;
 import org.rutebanken.netex.model.PresentationStructure;
+import org.rutebanken.netex.model.TransportOrganisationRefStructure;
+import org.rutebanken.netex.model.TransportOrganisationRefs_RelStructure;
 
 /**
  * Maps NeTEx line to OTP Route.
@@ -156,28 +160,71 @@ class RouteMapper {
   }
 
   /**
-   * Find an agency by mapping the GroupOfLines/Network Authority. If no authority is found a dummy
-   * agency is created and returned.
+   * Find an agency by mapping the GroupOfLines/Network Authority, the line's own AuthorityRef, or an
+   * AuthorityRef among its additionalOperators. If no authority is found a dummy agency is created
+   * and returned.
+   * <p>
+   * Each source is tried in turn rather than chosen by an if/else: a RepresentedByGroupRef that
+   * resolves to nothing is not a statement that the line has no authority, and the EU Passenger
+   * Information Profile allows a line's AUTHORITY to be carried in additionalOperators when its
+   * OPERATOR occupies the primary reference (EPIP §7.2.11).
    */
   private Agency findOrCreateAuthority(Line_VersionStructure line) {
-    GroupOfLinesRefStructure representedByGroupRef = line.getRepresentedByGroupRef();
-    Agency agency = null;
-    if (representedByGroupRef != null) {
-      String groupRef = representedByGroupRef.getRef();
+    Agency agency = findAuthorityInNetwork(line);
 
-      // Find authority, first in *GroupOfLines* and then if not found look in *Network*
-      Network network = netexIndex.lookupNetworkForLine(groupRef);
-
-      if (network != null) {
-        String orgRef = network.getTransportOrganisationRef().getValue().getRef();
-        agency = agenciesById.get(idFactory.createId(orgRef));
-      }
-    } else if (line.getAuthorityRef() != null) {
+    if (agency == null && line.getAuthorityRef() != null) {
       agency = agenciesById.get(idFactory.createId(line.getAuthorityRef().getRef()));
     }
-    // No authority found in Network or GroupOfLines.
+    if (agency == null) {
+      AuthorityRefStructure additional = findAdditional(line, AuthorityRefStructure.class);
+      if (additional != null) {
+        agency = agenciesById.get(idFactory.createId(additional.getRef()));
+      }
+    }
+    // No authority found in Network, GroupOfLines or on the line itself.
     // Use the dummy agency, create if necessary
     return agency != null ? agency : createOrGetDummyAgency(line);
+  }
+
+  @Nullable
+  private Agency findAuthorityInNetwork(Line_VersionStructure line) {
+    GroupOfLinesRefStructure representedByGroupRef = line.getRepresentedByGroupRef();
+
+    if (representedByGroupRef == null) {
+      return null;
+    }
+    // Find authority, first in *GroupOfLines* and then if not found look in *Network*
+    Network network = netexIndex.lookupNetworkForLine(representedByGroupRef.getRef());
+
+    // TransportOrganisationRef is optional on a NETWORK (EPIP Table 62)
+    if (network == null || network.getTransportOrganisationRef() == null) {
+      return null;
+    }
+    String orgRef = network.getTransportOrganisationRef().getValue().getRef();
+    return agenciesById.get(idFactory.createId(orgRef));
+  }
+
+  /**
+   * The first reference of the given type among the line's additionalOperators, or {@code null}.
+   * OperatorRef and AuthorityRef are both substitutable for TransportOrganisationRef, so the element
+   * name is recovered from the type of the value rather than from the list.
+   */
+  @Nullable
+  private static <T extends TransportOrganisationRefStructure> T findAdditional(
+    Line_VersionStructure line,
+    Class<T> type
+  ) {
+    TransportOrganisationRefs_RelStructure additionalOperators = line.getAdditionalOperators();
+
+    if (additionalOperators == null) {
+      return null;
+    }
+    for (JAXBElement<? extends TransportOrganisationRefStructure> ref : additionalOperators.getTransportOrganisationRef()) {
+      if (type.isInstance(ref.getValue())) {
+        return type.cast(ref.getValue());
+      }
+    }
+    return null;
   }
 
   private Agency createOrGetDummyAgency(Line_VersionStructure line) {
@@ -192,10 +239,19 @@ class RouteMapper {
     return agency;
   }
 
+  /**
+   * The line's OPERATOR, taken from its primary OperatorRef or, failing that, from its
+   * additionalOperators. A profile that permits only one primary TRANSPORT ORGANISATION on a LINE
+   * puts the other one in additionalOperators, so a line whose AUTHORITY is primary carries its
+   * OPERATOR there (EPIP Table 59).
+   */
   @Nullable
   private Operator findOperator(Line_VersionStructure line) {
     OperatorRefStructure opeRef = line.getOperatorRef();
 
+    if (opeRef == null) {
+      opeRef = findAdditional(line, OperatorRefStructure.class);
+    }
     if (opeRef == null) {
       return null;
     }

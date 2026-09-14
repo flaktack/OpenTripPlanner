@@ -11,6 +11,7 @@ import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import javax.annotation.Nullable;
 import org.junit.jupiter.api.Test;
 import org.opentripplanner.graph_builder.issue.api.DataImportIssueStore;
 import org.opentripplanner.model.impl.TransitDataImportBuilder;
@@ -22,16 +23,20 @@ import org.opentripplanner.transit.model.network.GroupOfRoutes;
 import org.opentripplanner.transit.model.network.Route;
 import org.opentripplanner.transit.model.organization.Agency;
 import org.opentripplanner.transit.model.organization.Branding;
+import org.opentripplanner.transit.model.organization.Operator;
 import org.opentripplanner.transit.service.SiteRepository;
 import org.rutebanken.netex.model.AllVehicleModesOfTransportEnumeration;
 import org.rutebanken.netex.model.Authority;
+import org.rutebanken.netex.model.AuthorityRef;
 import org.rutebanken.netex.model.BrandingRefStructure;
 import org.rutebanken.netex.model.GroupOfLinesRefStructure;
 import org.rutebanken.netex.model.Line;
 import org.rutebanken.netex.model.MultilingualString;
 import org.rutebanken.netex.model.Network;
+import org.rutebanken.netex.model.OperatorRefStructure;
 import org.rutebanken.netex.model.PresentationStructure;
 import org.rutebanken.netex.model.TransportOrganisationRefStructure;
+import org.rutebanken.netex.model.TransportOrganisationRefs_RelStructure;
 
 class RouteMapperTest {
 
@@ -41,6 +46,8 @@ class RouteMapperTest {
   private static final String GOL_NAME_1 = "G1";
   private static final String GOL_NAME_2 = "G2";
   private static final String AUTHORITY_ID = "RUT:Authority:1";
+  private static final String OPERATOR_ID = "RUT:Operator:1";
+  private static final String CO_OPERATOR_ID = "RUT:Operator:2";
   private static final String BRANDING_ID = "RUT:Branding:1";
   private static final String LINE_ID = "RUT:Line:1";
   private static final String FERRY_WITHOUT_BICYCLES_ID = "RUT:Line:2:NoBicycles";
@@ -257,6 +264,140 @@ class RouteMapperTest {
     assertEquals(2, groupsOfLines.size());
     assertTrue(groupsOfLines.stream().anyMatch(gol -> GOL_ID_1.equals(gol.getId().getId())));
     assertTrue(groupsOfLines.stream().anyMatch(gol -> GOL_ID_2.equals(gol.getId().getId())));
+  }
+
+  @Test
+  void mapRouteWithOperatorInAdditionalOperators() {
+    NetexEntityIndex netexIndex = new NetexEntityIndex();
+    TransitDataImportBuilder transitBuilder = new TransitDataImportBuilder(
+      new SiteRepository(),
+      DataImportIssueStore.NOOP
+    );
+
+    transitBuilder
+      .getOperatorsById()
+      .add(Operator.of(MappingSupport.ID_FACTORY.createId(OPERATOR_ID)).withName("Op").build());
+
+    // A profile that allows only one primary TRANSPORT ORGANISATION on a LINE puts the other in
+    // additionalOperators, so a line whose AUTHORITY is primary carries its OPERATOR there.
+    Line line = createExampleLine();
+    line.setAuthorityRef(new AuthorityRef().withRef(AUTHORITY_ID));
+    line.setAdditionalOperators(
+      new TransportOrganisationRefs_RelStructure().withTransportOrganisationRef(
+        MappingSupport.createJaxbElement(new OperatorRefStructure().withRef(OPERATOR_ID))
+      )
+    );
+
+    Route route = routeMapper(netexIndex, transitBuilder).mapRoute(line);
+
+    assertNotNull(route.getOperator());
+    assertEquals(OPERATOR_ID, route.getOperator().getId().getId());
+  }
+
+  @Test
+  void mapRouteTakesTheFirstOperatorInAdditionalOperators() {
+    NetexEntityIndex netexIndex = new NetexEntityIndex();
+    TransitDataImportBuilder transitBuilder = new TransitDataImportBuilder(
+      new SiteRepository(),
+      DataImportIssueStore.NOOP
+    );
+
+    transitBuilder
+      .getOperatorsById()
+      .add(Operator.of(MappingSupport.ID_FACTORY.createId(OPERATOR_ID)).withName("Op").build());
+    transitBuilder
+      .getOperatorsById()
+      .add(
+        Operator.of(MappingSupport.ID_FACTORY.createId(CO_OPERATOR_ID)).withName("CoOp").build()
+      );
+
+    // Nothing in the element tells a demoted primary apart from a co-operating company the feed
+    // put there, so the first entry is the contract. The producer writes the primary first.
+    Line line = createExampleLine();
+    line.setAuthorityRef(new AuthorityRef().withRef(AUTHORITY_ID));
+    line.setAdditionalOperators(
+      new TransportOrganisationRefs_RelStructure().withTransportOrganisationRef(
+        MappingSupport.createJaxbElement(new OperatorRefStructure().withRef(OPERATOR_ID)),
+        MappingSupport.createJaxbElement(new OperatorRefStructure().withRef(CO_OPERATOR_ID))
+      )
+    );
+
+    Route route = routeMapper(netexIndex, transitBuilder).mapRoute(line);
+
+    assertNotNull(route.getOperator());
+    assertEquals(OPERATOR_ID, route.getOperator().getId().getId());
+  }
+
+  @Test
+  void mapRouteWithAuthorityInAdditionalOperators() {
+    NetexEntityIndex netexIndex = new NetexEntityIndex();
+    TransitDataImportBuilder transitBuilder = new TransitDataImportBuilder(
+      new SiteRepository(),
+      DataImportIssueStore.NOOP
+    );
+
+    transitBuilder.getAgenciesById().add(createAgency());
+
+    Line line = createExampleLine();
+    line.setRepresentedByGroupRef(null);
+    line.setAdditionalOperators(
+      new TransportOrganisationRefs_RelStructure().withTransportOrganisationRef(
+        MappingSupport.createJaxbElement(new AuthorityRef().withRef(AUTHORITY_ID))
+      )
+    );
+
+    Route route = routeMapper(netexIndex, transitBuilder).mapRoute(line);
+
+    assertEquals(AUTHORITY_ID, route.getAgency().getId().getId());
+  }
+
+  @Test
+  void mapRouteFallsBackToAuthorityRefWhenGroupDoesNotResolve() {
+    NetexEntityIndex netexIndex = new NetexEntityIndex();
+    TransitDataImportBuilder transitBuilder = new TransitDataImportBuilder(
+      new SiteRepository(),
+      DataImportIssueStore.NOOP
+    );
+
+    transitBuilder.getAgenciesById().add(createAgency());
+
+    // The group ref names a Network that is not in the document; the line's own AuthorityRef is.
+    Line line = createExampleLine();
+    line.setAuthorityRef(new AuthorityRef().withRef(AUTHORITY_ID));
+
+    Route route = routeMapper(netexIndex, transitBuilder).mapRoute(line);
+
+    assertEquals(AUTHORITY_ID, route.getAgency().getId().getId());
+  }
+
+  @Test
+  void mapRouteWithNetworkWithoutTransportOrganisation() {
+    NetexEntityIndex netexIndex = new NetexEntityIndex();
+
+    // TransportOrganisationRef is optional on a NETWORK, so an absent one must not fail the build.
+    netexIndex.networkById.add(new Network().withId(NETWORK_ID));
+
+    Route route = routeMapper(netexIndex, null).mapRoute(createExampleLine());
+
+    assertEquals("N/A", route.getAgency().getName());
+  }
+
+  private RouteMapper routeMapper(
+    NetexEntityIndex netexIndex,
+    @Nullable TransitDataImportBuilder transitBuilder
+  ) {
+    return new RouteMapper(
+      DataImportIssueStore.NOOP,
+      MappingSupport.ID_FACTORY,
+      transitBuilder == null ? new DefaultEntityById<>() : transitBuilder.getAgenciesById(),
+      transitBuilder == null ? new DefaultEntityById<>() : transitBuilder.getOperatorsById(),
+      transitBuilder == null ? new DefaultEntityById<>() : transitBuilder.getBrandingsById(),
+      ArrayListMultimap.create(),
+      new DefaultEntityById<>(),
+      netexIndex.readOnlyView(),
+      TransitRepositoryForTest.TIME_ZONE_ID,
+      EMPTY_FERRY_WITHOUT_BICYCLE_IDS
+    );
   }
 
   private Line createExampleLine() {
